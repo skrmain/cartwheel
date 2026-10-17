@@ -1,10 +1,12 @@
 import { z } from "zod";
 
-export const cartIdSchema = z.object({ cartId: z.string().min(1) });
+const nonEmptyString = z.string().trim().min(1);
+
+export const cartIdSchema = z.object({ cartId: nonEmptyString });
 export const cartItemParamsSchema = z.object({
-  cartId: z.string().min(1),
-  productId: z.string().min(1)
+  cartId: nonEmptyString,
+  productId: nonEmptyString
 });
 export const updateCartItemSchema = z.object({
-  quantity: z.number().int().positive()
+  quantity: z.number().int().min(1).max(100)
 });

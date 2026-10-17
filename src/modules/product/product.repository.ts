@@ -6,5 +6,10 @@ export const productRepository = {
     return (tx ?? prisma).product.findMany({
       orderBy: [{ createdAt: "asc" }, { id: "asc" }]
     });
+  },
+
+  async findById(id: string, tx?: PrismaClientOrTransaction) {
+    await initializePrisma();
+    return (tx ?? prisma).product.findUnique({ where: { id } });
   }
 };

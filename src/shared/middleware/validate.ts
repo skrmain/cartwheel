@@ -9,14 +9,7 @@ export function validate(
   return (req, _res, next) => {
     const result = schema.safeParse(target === "params" ? req.params : req.body);
     if (!result.success) {
-      next(
-        new AppError(
-          "Request validation failed.",
-          "VALIDATION_ERROR",
-          400,
-          result.error.flatten()
-        )
-      );
+      next(new AppError("Request validation failed.", "VALIDATION_ERROR", 400, result.error.flatten()));
       return;
     }
 

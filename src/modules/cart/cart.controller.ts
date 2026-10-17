@@ -47,7 +47,8 @@ export const removeCartItem: RequestHandler = async (req, res, next) => {
 
 export const checkout: RequestHandler = async (req, res, next) => {
   try {
-    res.json(await cartService.checkout(routeParam(req.params, "cartId"), req.body));
+    const result = await cartService.checkout(routeParam(req.params, "cartId"), req.body);
+    res.status(result.replayed ? 200 : 201).json(result);
   } catch (error) {
     next(error);
   }
