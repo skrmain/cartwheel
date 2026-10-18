@@ -749,15 +749,11 @@ paths:
   /docs:
     get:
       operationId: getSwaggerUi
-      summary: Open interactive Swagger UI
+      summary: Redirect to the interactive Swagger UI
       tags: [Documentation]
       responses:
-        '200':
-          description: Swagger UI HTML.
-          content:
-            text/html:
-              schema:
-                type: string
+        '308':
+          description: Permanently redirects to /docs/, where the Swagger UI is served.
         '400':
           $ref: '#/components/responses/InvalidJson'
   /openapi.yaml:

@@ -21,8 +21,14 @@ const openapiDocument = parse(openapiYaml);
 app.use(requestLoggerMiddleware);
 app.use(express.json({ limit: '100kb' }));
 
-app.get('/docs', swaggerUi.setup(openapiDocument));
-app.use('/docs', swaggerUi.serve);
+app.get('/docs', (req, res, next) => {
+    if (req.path === '/docs') {
+        res.redirect(308, '/docs/');
+        return;
+    }
+    next();
+});
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiDocument));
 app.get('/openapi.yaml', (_req, res) => {
     res.type('application/yaml').send(openapiYaml);
 });

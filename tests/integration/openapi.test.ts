@@ -57,12 +57,22 @@ it('keeps documented paths and HTTP methods in sync with Express registrations',
 });
 
 it('serves the Swagger UI, its assets, and the raw OpenAPI source', async () => {
-    const ui = await request(app).get('/docs');
+    const redirect = await request(app).get('/docs');
+    expect(redirect.status).toBe(308);
+    expect(redirect.headers.location).toBe('/docs/');
+
+    const ui = await request(app).get('/docs/');
     expect(ui.status).toBe(200);
     expect(ui.text).toContain('swagger-ui-bundle.js');
 
     const css = await request(app).get('/docs/swagger-ui.css');
     expect(css.status).toBe(200);
+
+    const bundle = await request(app).get('/docs/swagger-ui-bundle.js');
+    expect(bundle.status).toBe(200);
+
+    const init = await request(app).get('/docs/swagger-ui-init.js');
+    expect(init.status).toBe(200);
 
     const rawSpec = await request(app).get('/openapi.yaml');
     expect(rawSpec.status).toBe(200);
