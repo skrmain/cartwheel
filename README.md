@@ -35,6 +35,9 @@ npm test
 npm run typecheck
 ```
 
+Tests are organized under `tests/unit`, `tests/integration`, and `tests/concurrency`.
+Each database-backed test file uses a fresh temporary SQLite database and resets its data between tests.
+
 ## Public endpoints
 
 | Method   | Path                              | Request                                | Typical response                                 | Status                |
@@ -73,6 +76,8 @@ Errors use the standard response shape:
     }
 }
 ```
+
+Malformed JSON request bodies return `400` with the `INVALID_JSON` error code.
 
 ## Example flow
 
