@@ -1,85 +1,85 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+    provider = "prisma-client"
+    output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "sqlite"
+    provider = "sqlite"
 }
 
 model Product {
-  id         String      @id @default(uuid())
-  name       String
-  priceCents Int
-  stock      Int
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+    id         String      @id @default(uuid())
+    name       String
+    priceCents Int
+    stock      Int
+    createdAt  DateTime    @default(now())
+    updatedAt  DateTime    @updatedAt
+    cartItems  CartItem[]
+    orderItems OrderItem[]
 }
 
 model Cart {
-  id        String     @id @default(uuid())
-  status    String     @default("OPEN")
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  items     CartItem[]
-  order     Order?
+    id        String     @id @default(uuid())
+    status    String     @default("OPEN")
+    createdAt DateTime   @default(now())
+    updatedAt DateTime   @updatedAt
+    items     CartItem[]
+    order     Order?
 }
 
 model CartItem {
-  id                  String  @id @default(uuid())
-  cartId              String
-  productId           String
-  quantity            Int
-  unitPriceCentsAtAdd Int
-  cart                Cart    @relation(fields: [cartId], references: [id])
-  product             Product @relation(fields: [productId], references: [id])
+    id                  String  @id @default(uuid())
+    cartId              String
+    productId           String
+    quantity            Int
+    unitPriceCentsAtAdd Int
+    cart                Cart    @relation(fields: [cartId], references: [id])
+    product             Product @relation(fields: [productId], references: [id])
 
-  @@unique([cartId, productId])
-  @@index([cartId])
+    @@unique([cartId, productId])
+    @@index([cartId])
 }
 
 model Order {
-  id            String      @id @default(uuid())
-  cartId        String      @unique
-  status        String      @default("PLACED")
-  subtotalCents Int
-  discountCents Int         @default(0)
-  totalCents    Int
-  couponId      String?     @unique
-  couponCode    String?
-  couponPercent Int?
-  paymentRef    String?
-  createdAt     DateTime    @default(now())
-  cart          Cart        @relation(fields: [cartId], references: [id])
-  coupon        Coupon?     @relation(fields: [couponId], references: [id])
-  items         OrderItem[]
+    id            String      @id @default(uuid())
+    cartId        String      @unique
+    status        String      @default("PLACED")
+    subtotalCents Int
+    discountCents Int         @default(0)
+    totalCents    Int
+    couponId      String?     @unique
+    couponCode    String?
+    couponPercent Int?
+    paymentRef    String?
+    createdAt     DateTime    @default(now())
+    cart          Cart        @relation(fields: [cartId], references: [id])
+    coupon        Coupon?     @relation(fields: [couponId], references: [id])
+    items         OrderItem[]
 
-  @@index([createdAt])
+    @@index([createdAt])
 }
 
 model OrderItem {
-  id             String  @id @default(uuid())
-  orderId        String
-  productId      String
-  productName    String
-  unitPriceCents Int
-  quantity       Int
-  lineTotalCents Int
-  order          Order   @relation(fields: [orderId], references: [id])
-  product        Product @relation(fields: [productId], references: [id])
+    id             String  @id @default(uuid())
+    orderId        String
+    productId      String
+    productName    String
+    unitPriceCents Int
+    quantity       Int
+    lineTotalCents Int
+    order          Order   @relation(fields: [orderId], references: [id])
+    product        Product @relation(fields: [productId], references: [id])
 
-  @@index([orderId])
+    @@index([orderId])
 }
 
 model Coupon {
-  id              String    @id @default(uuid())
-  code            String    @unique
-  milestone       Int       @unique
-  discountPercent Int
-  status          String    @default("AVAILABLE")
-  createdAt       DateTime  @default(now())
-  redeemedAt      DateTime?
-  order           Order?
+    id              String    @id @default(uuid())
+    code            String    @unique
+    milestone       Int       @unique
+    discountPercent Int
+    status          String    @default("AVAILABLE")
+    createdAt       DateTime  @default(now())
+    redeemedAt      DateTime?
+    order           Order?
 }
