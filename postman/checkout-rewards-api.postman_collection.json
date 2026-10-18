@@ -1,0 +1,216 @@
+{
+  "info": {
+    "_postman_id": "44cfca55-584f-46de-b845-144865755b99",
+    "name": "Checkout and Rewards API",
+    "description": "Ordered local demo for the checkout and rewards API. Run against a freshly seeded database with the local environment selected. Admin routes intentionally have no authentication.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "cartId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "couponCode", "value": "" },
+    { "key": "errorCartId", "value": "" },
+    { "key": "couponCartId", "value": "" },
+    { "key": "reuseCartId", "value": "" },
+    { "key": "stockCartOne", "value": "" },
+    { "key": "stockCartTwo", "value": "" },
+    { "key": "milestoneCartId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - List products",
+      "request": { "method": "GET", "url": "{{baseUrl}}/products" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Products are listed', () => pm.response.to.have.status(200));"] } }]
+    },
+    {
+      "name": "02 - Create primary cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('cartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "03 - Add keyboard to primary cart",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{cartId}}/items/prod-keyboard", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":1}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Item added', () => pm.response.to.have.status(200));"] } }]
+    },
+    {
+      "name": "04 - View primary cart",
+      "request": { "method": "GET", "url": "{{baseUrl}}/carts/{{cartId}}" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Cart is visible', () => pm.response.to.have.status(200));"] } }]
+    },
+    {
+      "name": "05 - Checkout primary cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{cartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"expectedTotalCents\":7999}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.test('First checkout is not a replay', () => pm.expect(pm.response.json().replayed).to.eql(false));", "pm.collectionVariables.set('orderId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "06 - Replay checkout (different coupon is ignored)",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{cartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"couponCode\":\"SAVE-REPLAY-IGNORED\"}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.test('Replay returns the original order', () => { pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('orderId')); pm.expect(pm.response.json().replayed).to.eql(true); });"] } }]
+    },
+    {
+      "name": "Read original order (captured orderId)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/orders/{{orderId}}" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.test('Order ID matches checkout', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('orderId')));"] } }]
+    },
+    {
+      "name": "07 - Error: missing product",
+      "request": { "method": "GET", "url": "{{baseUrl}}/products/no-such-product" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(404);", "pm.test('Error code is PRODUCT_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('PRODUCT_NOT_FOUND'));"] } }]
+    },
+    {
+      "name": "08 - Error: quantity outside 1-100",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{cartId}}/items/prod-keyboard", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":101}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(400);", "pm.test('Error code is VALIDATION_ERROR', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'));"] } }]
+    },
+    {
+      "name": "09 - Create empty cart for error case",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('errorCartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "10 - Error: checkout empty cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{errorCartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(422);", "pm.test('Error code is EMPTY_CART', () => pm.expect(pm.response.json().error.code).to.eql('EMPTY_CART'));"] } }]
+    },
+    {
+      "name": "11 - Place milestone order 2",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('milestoneCartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "12 - Add mouse to milestone order 2",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/items/prod-mouse", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":1}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "13 - Checkout milestone order 2",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);"] } }]
+    },
+    {
+      "name": "14 - Place milestone order 3",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('milestoneCartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "15 - Add mouse to milestone order 3",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/items/prod-mouse", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":1}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "16 - Checkout milestone order 3",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);"] } }]
+    },
+    {
+      "name": "17 - Place milestone order 4",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('milestoneCartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "18 - Add mouse to milestone order 4",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/items/prod-mouse", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":1}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "19 - Checkout milestone order 4",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);"] } }]
+    },
+    {
+      "name": "20 - Place milestone order 5",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('milestoneCartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "21 - Add mouse to milestone order 5",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/items/prod-mouse", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":1}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "22 - Checkout milestone order 5",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{milestoneCartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);"] } }]
+    },
+    {
+      "name": "23 - Admin: generate coupon",
+      "request": { "method": "POST", "url": "{{baseUrl}}/admin/coupons/generate", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('couponCode', pm.response.json().code);"] } }]
+    },
+    {
+      "name": "24 - Create coupon cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('couponCartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "25 - Add keyboard to coupon cart",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{couponCartId}}/items/prod-keyboard", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":1}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "26 - Checkout with coupon",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{couponCartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"couponCode\":\"{{couponCode}}\"}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.test('Coupon discount applied', () => pm.expect(pm.response.json().discountCents).to.be.above(0));"] } }]
+    },
+    {
+      "name": "27 - Create coupon-reuse cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('reuseCartId', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "28 - Add keyboard to coupon-reuse cart",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{reuseCartId}}/items/prod-keyboard", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":1}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "29 - Error: reuse redeemed coupon",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{reuseCartId}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"couponCode\":\"{{couponCode}}\"}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(409);", "pm.test('Error code is COUPON_ALREADY_REDEEMED', () => pm.expect(pm.response.json().error.code).to.eql('COUPON_ALREADY_REDEEMED'));"] } }]
+    },
+    {
+      "name": "30 - Create first limited-stock cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('stockCartOne', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "31 - Create second limited-stock cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.collectionVariables.set('stockCartTwo', pm.response.json().id);"] } }]
+    },
+    {
+      "name": "32 - Add 2 desk mats to first cart",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{stockCartOne}}/items/prod-desk-mat", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":2}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "33 - Add 2 desk mats to second cart",
+      "request": { "method": "PUT", "url": "{{baseUrl}}/carts/{{stockCartTwo}}/items/prod-desk-mat", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"quantity\":2}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "34 - Checkout first limited-stock cart",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{stockCartOne}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);"] } }]
+    },
+    {
+      "name": "35 - Error: oversell limited stock",
+      "request": { "method": "POST", "url": "{{baseUrl}}/carts/{{stockCartTwo}}/checkout", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(409);", "pm.test('Error code is INSUFFICIENT_STOCK', () => pm.expect(pm.response.json().error.code).to.eql('INSUFFICIENT_STOCK'));"] } }]
+    },
+    {
+      "name": "36 - Admin: list coupons",
+      "request": { "method": "GET", "url": "{{baseUrl}}/admin/coupons" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "37 - Admin: list orders",
+      "request": { "method": "GET", "url": "{{baseUrl}}/admin/orders" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    },
+    {
+      "name": "38 - Admin: report",
+      "request": { "method": "GET", "url": "{{baseUrl}}/admin/report" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+    }
+  ]
+}

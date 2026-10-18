@@ -1,0 +1,1010 @@
+openapi: 3.0.3
+info:
+  title: Checkout and Rewards API
+  version: 1.0.0
+  description: >
+    A local-first ecommerce API for product browsing, cart checkout, coupon rewards,
+    and administrative reporting. No accounts or shared workspace are required.
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+security: []
+tags:
+  - name: Products
+    description: Public product browsing endpoints.
+  - name: Carts
+    description: Public cart, item, and checkout operations.
+  - name: Orders
+    description: Public order lookup and checkout responses.
+  - name: Admin
+    description: administrative operation, no auth implemented by design
+  - name: Documentation
+    description: API reference UI and source document.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check API health
+      tags: [Products]
+      responses:
+        '200':
+          description: API is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+              example: { status: ok }
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+  /products:
+    get:
+      operationId: listProducts
+      summary: List products
+      tags: [Products]
+      responses:
+        '200':
+          description: Products ordered by creation time and ID.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+              example:
+                - id: prod-keyboard
+                  name: Mechanical Keyboard
+                  priceCents: 7999
+                  stock: 50
+                  createdAt: '2026-10-18T09:00:00.000Z'
+                  updatedAt: '2026-10-18T09:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /products/{productId}:
+    get:
+      operationId: getProduct
+      summary: Get a product
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Product found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              example:
+                id: prod-keyboard
+                name: Mechanical Keyboard
+                priceCents: 7999
+                stock: 50
+                createdAt: '2026-10-18T09:00:00.000Z'
+                updatedAt: '2026-10-18T09:00:00.000Z'
+        '404':
+          description: PRODUCT_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: PRODUCT_NOT_FOUND
+                  message: Product "missing" was not found.
+                  details: { productId: missing }
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /carts:
+    post:
+      operationId: createCart
+      summary: Create an empty cart
+      tags: [Carts]
+      responses:
+        '201':
+          description: Cart created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+              example:
+                id: 6d11c170-8f7e-451f-8e44-1590166784b7
+                status: OPEN
+                items: []
+                subtotalCents: 0
+                warnings: []
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /carts/{cartId}:
+    get:
+      operationId: getCart
+      summary: Get the live cart and pricing warnings
+      tags: [Carts]
+      parameters:
+        - $ref: '#/components/parameters/CartId'
+      responses:
+        '200':
+          description: Cart with current product prices, stock, and warnings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+              example:
+                id: 6d11c170-8f7e-451f-8e44-1590166784b7
+                status: OPEN
+                items:
+                  - productId: prod-keyboard
+                    name: Mechanical Keyboard
+                    quantity: 2
+                    unitPriceCents: 7999
+                    unitPriceCentsAtAdd: 7999
+                    priceChanged: false
+                    lineTotalCents: 15998
+                    availableStock: 50
+                    stockWarning: false
+                subtotalCents: 15998
+                warnings: []
+        '404':
+          description: CART_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: CART_NOT_FOUND
+                  message: Cart "missing" was not found.
+                  details: { cartId: missing }
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /carts/{cartId}/items/{productId}:
+    put:
+      operationId: setCartItemQuantity
+      summary: Set a cart item's quantity
+      description: PUT replaces the quantity; it does not increment it. Quantity changes remain absolute and must be available in stock.
+      tags: [Carts]
+      parameters:
+        - $ref: '#/components/parameters/CartId'
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+            example: { quantity: 2 }
+      responses:
+        '200':
+          description: Updated live cart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+              example:
+                id: 6d11c170-8f7e-451f-8e44-1590166784b7
+                status: OPEN
+                items:
+                  - productId: prod-keyboard
+                    name: Mechanical Keyboard
+                    quantity: 2
+                    unitPriceCents: 7999
+                    unitPriceCentsAtAdd: 7999
+                    priceChanged: false
+                    lineTotalCents: 15998
+                    availableStock: 50
+                    stockWarning: false
+                subtotalCents: 15998
+                warnings: []
+        '400':
+          description: INVALID_JSON or VALIDATION_ERROR (including a quantity outside integer range 1-100).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validation:
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Request validation failed.
+                      details:
+                        issues:
+                          - path: [quantity]
+                            message: 'Too small: expected number to be >=1'
+                invalidJson:
+                  value:
+                    error:
+                      code: INVALID_JSON
+                      message: Request body contains invalid JSON.
+                      details: {}
+        '404':
+          description: CART_NOT_FOUND or PRODUCT_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                cart:
+                  value:
+                    error:
+                      code: CART_NOT_FOUND
+                      message: Cart "missing" was not found.
+                      details: { cartId: missing }
+                product:
+                  value:
+                    error:
+                      code: PRODUCT_NOT_FOUND
+                      message: Product "missing" was not found.
+                      details: { productId: missing }
+        '409':
+          description: CART_ALREADY_CHECKED_OUT or INSUFFICIENT_STOCK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                checkedOut:
+                  value:
+                    error:
+                      code: CART_ALREADY_CHECKED_OUT
+                      message: Cart "cart-id" has already been checked out.
+                      details: { cartId: cart-id }
+                stock:
+                  value:
+                    error:
+                      code: INSUFFICIENT_STOCK
+                      message: Not enough stock is available for the requested items.
+                      details:
+                        items: [{ productId: prod-desk-mat, requested: 4, available: 3 }]
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+    delete:
+      operationId: removeCartItem
+      summary: Remove an item from a cart
+      tags: [Carts]
+      parameters:
+        - $ref: '#/components/parameters/CartId'
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Updated live cart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+              example:
+                id: 6d11c170-8f7e-451f-8e44-1590166784b7
+                status: OPEN
+                items: []
+                subtotalCents: 0
+                warnings: []
+        '404':
+          description: CART_NOT_FOUND or ITEM_NOT_IN_CART.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                cart:
+                  value:
+                    error:
+                      code: CART_NOT_FOUND
+                      message: Cart "missing" was not found.
+                      details: { cartId: missing }
+                item:
+                  value:
+                    error:
+                      code: ITEM_NOT_IN_CART
+                      message: Product "prod-keyboard" is not in the cart.
+                      details: { productId: prod-keyboard }
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '409':
+          description: CART_ALREADY_CHECKED_OUT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: CART_ALREADY_CHECKED_OUT
+                  message: Cart "cart-id" has already been checked out.
+                  details: { cartId: cart-id }
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /carts/{cartId}/checkout:
+    post:
+      operationId: checkoutCart
+      summary: Check out a cart
+      description: >
+        The first successful checkout returns 201 and replayed:false. Retrying an already
+        successful checkout returns 200, replayed:true, and the exact original order without
+        charging again or decrementing stock again. A retry with a different couponCode still
+        returns the original order and ignores the new coupon. expectedTotalCents compares
+        against the current total (after any coupon discount); a mismatch returns PRICE_CHANGED.
+        Checkout is atomic: any failure leaves stock, coupon redemption, and cart status untouched.
+      tags: [Carts, Orders]
+      parameters:
+        - $ref: '#/components/parameters/CartId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                couponCode:
+                  type: string
+                  minLength: 3
+                  pattern: '^\s*[A-Za-z0-9-]{3,}\s*$'
+                  description: Trimmed and normalized to uppercase before lookup.
+                expectedTotalCents:
+                  type: integer
+                  minimum: 0
+            examples:
+              noCoupon:
+                value: { expectedTotalCents: 15998 }
+              withCoupon:
+                value: { couponCode: SAVE-A1B2C3D4, expectedTotalCents: 14398 }
+      responses:
+        '200':
+          description: Successful replay of an earlier checkout; replayed is true.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+              example:
+                id: 0f3c561c-d9c1-4437-8b19-01f8458db4b3
+                cartId: 6d11c170-8f7e-451f-8e44-1590166784b7
+                status: PLACED
+                subtotalCents: 15998
+                discountCents: 0
+                totalCents: 15998
+                couponId: null
+                couponCode: null
+                couponPercent: null
+                paymentRef: fake-cart:6d11c170-8f7e-451f-8e44-1590166784b7
+                createdAt: '2026-10-18T09:00:00.000Z'
+                items:
+                  - id: 2f0ecf49-13e3-4ba6-b62d-58ea2663228d
+                    productId: prod-keyboard
+                    productName: Mechanical Keyboard
+                    quantity: 2
+                    unitPriceCents: 7999
+                    lineTotalCents: 15998
+                replayed: true
+        '201':
+          description: First successful checkout; replayed is false.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+              example:
+                id: 0f3c561c-d9c1-4437-8b19-01f8458db4b3
+                cartId: 6d11c170-8f7e-451f-8e44-1590166784b7
+                status: PLACED
+                subtotalCents: 15998
+                discountCents: 0
+                totalCents: 15998
+                couponId: null
+                couponCode: null
+                couponPercent: null
+                paymentRef: fake-cart:6d11c170-8f7e-451f-8e44-1590166784b7
+                createdAt: '2026-10-18T09:00:00.000Z'
+                items:
+                  - id: 2f0ecf49-13e3-4ba6-b62d-58ea2663228d
+                    productId: prod-keyboard
+                    productName: Mechanical Keyboard
+                    quantity: 2
+                    unitPriceCents: 7999
+                    lineTotalCents: 15998
+                price: { subtotalCents: 15998, discountCents: 0, totalCents: 15998 }
+        '400':
+          description: INVALID_JSON or VALIDATION_ERROR (including malformed couponCode or expectedTotalCents).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validation:
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Request validation failed.
+                      details:
+                        issues:
+                          - path: [expectedTotalCents]
+                            message: 'Invalid input: expected int'
+                invalidJson:
+                  value:
+                    error:
+                      code: INVALID_JSON
+                      message: Request body contains invalid JSON.
+                      details: {}
+        '402':
+          description: PAYMENT_FAILED; all transactional changes are rolled back.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: PAYMENT_FAILED
+                  message: Payment failed.
+                  details: { cartId: cart-id, amountCents: 15998 }
+        '404':
+          description: CART_NOT_FOUND or COUPON_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                cart:
+                  value:
+                    error:
+                      code: CART_NOT_FOUND
+                      message: Cart "missing" was not found.
+                      details: { cartId: missing }
+                coupon:
+                  value:
+                    error:
+                      code: COUPON_NOT_FOUND
+                      message: Coupon "SAVE-NOTFOUND" was not found.
+                      details: { code: SAVE-NOTFOUND }
+        '409':
+          description: INSUFFICIENT_STOCK, PRICE_CHANGED, or COUPON_ALREADY_REDEEMED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                stock:
+                  value:
+                    error:
+                      code: INSUFFICIENT_STOCK
+                      message: Not enough stock is available for the requested items.
+                      details:
+                        items: [{ productId: prod-desk-mat, requested: 2, available: 1 }]
+                priceChanged:
+                  value:
+                    error:
+                      code: PRICE_CHANGED
+                      message: The cart total changed while checking out.
+                      details:
+                        oldTotalCents: 2000
+                        newTotalCents: 3000
+                        itemChanges:
+                          - productId: prod-keyboard
+                            oldUnitPriceCents: 1000
+                            newUnitPriceCents: 1500
+                            oldLineTotalCents: 2000
+                            newLineTotalCents: 3000
+                            deltaCents: 1000
+                couponRedeemed:
+                  value:
+                    error:
+                      code: COUPON_ALREADY_REDEEMED
+                      message: Coupon "SAVE-A1B2C3D4" has already been redeemed.
+                      details: { code: SAVE-A1B2C3D4 }
+        '422':
+          description: EMPTY_CART.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: EMPTY_CART
+                  message: Cart is empty.
+                  details: {}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Get an order snapshot
+      tags: [Orders]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Immutable order and item snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+              example:
+                id: 0f3c561c-d9c1-4437-8b19-01f8458db4b3
+                cartId: 6d11c170-8f7e-451f-8e44-1590166784b7
+                status: PLACED
+                subtotalCents: 15998
+                discountCents: 0
+                totalCents: 15998
+                couponCode: null
+                couponPercent: null
+                paymentRef: fake-cart:6d11c170-8f7e-451f-8e44-1590166784b7
+                createdAt: '2026-10-18T09:00:00.000Z'
+                items:
+                  - id: 2f0ecf49-13e3-4ba6-b62d-58ea2663228d
+                    productId: prod-keyboard
+                    productName: Mechanical Keyboard
+                    quantity: 2
+                    unitPriceCents: 7999
+                    lineTotalCents: 15998
+        '404':
+          description: ORDER_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: ORDER_NOT_FOUND
+                  message: Order "missing" was not found.
+                  details: { orderId: missing }
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /admin/coupons/generate:
+    post:
+      operationId: generateCoupons
+      summary: Generate the next eligible milestone coupon
+      description: administrative operation, no auth implemented by design
+      tags: [Admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                count:
+                  type: integer
+                  minimum: 1
+                  description: Accepted for compatibility; one coupon is generated per call.
+            example: {}
+      responses:
+        '201':
+          description: Coupon generated for the next eligible order milestone.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Coupon'
+              example:
+                id: 7a19d645-05e0-4653-a338-e7c7d46a3c37
+                code: SAVE-A1B2C3D4
+                milestone: 1
+                discountPercent: 10
+                status: AVAILABLE
+                createdAt: '2026-10-18T09:00:00.000Z'
+        '400':
+          description: INVALID_JSON or VALIDATION_ERROR.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validation:
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Request validation failed.
+                      details:
+                        issues:
+                          - path: [count]
+                            message: 'Invalid input: expected int'
+                invalidJson:
+                  value:
+                    error:
+                      code: INVALID_JSON
+                      message: Request body contains invalid JSON.
+                      details: {}
+        '409':
+          description: NO_ELIGIBLE_MILESTONE; no unissued milestone reward is available yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NO_ELIGIBLE_MILESTONE
+                  message: No eligible coupon milestone is available.
+                  details: { totalOrders: 4, n: 5, rewardedMilestones: 0, eligibleMilestones: 0 }
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /admin/coupons:
+    get:
+      operationId: listCoupons
+      summary: List generated coupons
+      description: administrative operation, no auth implemented by design
+      tags: [Admin]
+      responses:
+        '200':
+          description: Coupons with redemption time and linked order ID.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Coupon'
+              example:
+                - id: 7a19d645-05e0-4653-a338-e7c7d46a3c37
+                  code: SAVE-A1B2C3D4
+                  milestone: 1
+                  discountPercent: 10
+                  status: AVAILABLE
+                  createdAt: '2026-10-18T09:00:00.000Z'
+                  redeemedAt: null
+                  orderId: null
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /admin/orders:
+    get:
+      operationId: listOrders
+      summary: List all orders
+      description: administrative operation, no auth implemented by design
+      tags: [Admin]
+      responses:
+        '200':
+          description: Orders newest first, including immutable items.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+              example:
+                - id: 0f3c561c-d9c1-4437-8b19-01f8458db4b3
+                  cartId: 6d11c170-8f7e-451f-8e44-1590166784b7
+                  status: PLACED
+                  subtotalCents: 15998
+                  discountCents: 0
+                  totalCents: 15998
+                  couponId: null
+                  couponCode: null
+                  couponPercent: null
+                  paymentRef: fake-cart:6d11c170-8f7e-451f-8e44-1590166784b7
+                  createdAt: '2026-10-18T09:00:00.000Z'
+                  items:
+                    - id: 2f0ecf49-13e3-4ba6-b62d-58ea2663228d
+                      productId: prod-keyboard
+                      productName: Mechanical Keyboard
+                      quantity: 2
+                      unitPriceCents: 7999
+                      lineTotalCents: 15998
+                  replayed: false
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /admin/report:
+    get:
+      operationId: getReport
+      summary: Get order and coupon aggregates
+      description: administrative operation, no auth implemented by design
+      tags: [Admin]
+      responses:
+        '200':
+          description: Revenue, sold quantities, and coupon counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+              example:
+                totalOrders: 5
+                quantityByProduct:
+                  - { productId: prod-keyboard, productName: Mechanical Keyboard, quantity: 6 }
+                grossRevenueCents: 47994
+                totalDiscountCents: 0
+                netRevenueCents: 47994
+                coupons: { generated: 1, available: 1, redeemed: 0 }
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceBusy'
+  /docs:
+    get:
+      operationId: getSwaggerUi
+      summary: Open interactive Swagger UI
+      tags: [Documentation]
+      responses:
+        '200':
+          description: Swagger UI HTML.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+  /openapi.yaml:
+    get:
+      operationId: getOpenApiYaml
+      summary: Download the raw OpenAPI document
+      tags: [Documentation]
+      responses:
+        '200':
+          description: OpenAPI source of truth.
+          content:
+            application/yaml:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+components:
+  parameters:
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      description: Product identifier.
+      schema: { type: string, minLength: 1 }
+      example: prod-keyboard
+    CartId:
+      name: cartId
+      in: path
+      required: true
+      description: Cart identifier.
+      schema: { type: string, minLength: 1 }
+      example: 6d11c170-8f7e-451f-8e44-1590166784b7
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      description: Order identifier.
+      schema: { type: string, minLength: 1 }
+      example: 0f3c561c-d9c1-4437-8b19-01f8458db4b3
+  responses:
+    InvalidJson:
+      description: INVALID_JSON.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: INVALID_JSON
+              message: Request body contains invalid JSON.
+              details: {}
+    InternalServerError:
+      description: INTERNAL_SERVER_ERROR for an unexpected failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: INTERNAL_SERVER_ERROR
+              message: An unexpected error occurred.
+              details: {}
+    ServiceBusy:
+      description: SERVICE_BUSY; retry after the indicated number of seconds.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          example: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: SERVICE_BUSY
+              message: The service is temporarily busy. Please retry.
+              details: { retryAfterSeconds: 1 }
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+      example:
+        error:
+          code: PRODUCT_NOT_FOUND
+          message: Product "missing" was not found.
+          details: { productId: missing }
+    ErrorCode:
+      type: string
+      description: Stable API error identifiers, with their meaning and HTTP status.
+      enum:
+        - INVALID_JSON
+        - VALIDATION_ERROR
+        - INVALID_QUANTITY
+        - PRODUCT_NOT_FOUND
+        - CART_NOT_FOUND
+        - ORDER_NOT_FOUND
+        - ITEM_NOT_IN_CART
+        - CART_ALREADY_CHECKED_OUT
+        - EMPTY_CART
+        - INSUFFICIENT_STOCK
+        - PRICE_CHANGED
+        - COUPON_NOT_FOUND
+        - COUPON_ALREADY_REDEEMED
+        - COUPON_INVALID_FORMAT
+        - NO_ELIGIBLE_MILESTONE
+        - PAYMENT_FAILED
+        - SERVICE_BUSY
+        - INTERNAL_SERVER_ERROR
+        - NOT_FOUND
+      x-error-codes:
+        INVALID_JSON: { httpStatus: 400, description: Request body is not valid JSON. }
+        VALIDATION_ERROR: { httpStatus: 400, description: Request parameters or body failed schema validation. }
+        INVALID_QUANTITY: { httpStatus: 422, description: Quantity must be an integer from 1 to 100 (service-level guard; HTTP validation returns VALIDATION_ERROR). }
+        PRODUCT_NOT_FOUND: { httpStatus: 404, description: The requested product does not exist. }
+        CART_NOT_FOUND: { httpStatus: 404, description: The requested cart does not exist. }
+        ORDER_NOT_FOUND: { httpStatus: 404, description: The requested order does not exist. }
+        ITEM_NOT_IN_CART: { httpStatus: 404, description: The requested product is not in the cart. }
+        CART_ALREADY_CHECKED_OUT: { httpStatus: 409, description: The cart is already checked out and cannot be changed. }
+        EMPTY_CART: { httpStatus: 422, description: An empty cart cannot be checked out. }
+        INSUFFICIENT_STOCK: { httpStatus: 409, description: Requested quantity exceeds available stock. }
+        PRICE_CHANGED: { httpStatus: 409, description: Current checkout total differs from expectedTotalCents. }
+        COUPON_NOT_FOUND: { httpStatus: 404, description: The coupon code does not exist. }
+        COUPON_ALREADY_REDEEMED: { httpStatus: 409, description: The coupon has already been redeemed. }
+        COUPON_INVALID_FORMAT: { httpStatus: 422, description: Coupon code format is invalid (service-level guard; HTTP validation returns VALIDATION_ERROR). }
+        NO_ELIGIBLE_MILESTONE: { httpStatus: 409, description: No new reward milestone has been reached. }
+        PAYMENT_FAILED: { httpStatus: 402, description: The payment gateway rejected checkout. }
+        SERVICE_BUSY: { httpStatus: 503, description: The database is temporarily locked or busy. }
+        INTERNAL_SERVER_ERROR: { httpStatus: 500, description: An unexpected server failure occurred. }
+        NOT_FOUND: { httpStatus: 404, description: No registered route matches the request path. }
+    Product:
+      type: object
+      required: [id, name, priceCents, stock, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        priceCents: { type: integer, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CartItem:
+      type: object
+      required: [productId, name, quantity, unitPriceCents, unitPriceCentsAtAdd, priceChanged, lineTotalCents, availableStock, stockWarning]
+      properties:
+        productId: { type: string }
+        name: { type: string }
+        quantity: { type: integer, minimum: 1, maximum: 100 }
+        unitPriceCents: { type: integer }
+        unitPriceCentsAtAdd: { type: integer }
+        priceChanged: { type: boolean }
+        lineTotalCents: { type: integer }
+        availableStock: { type: integer }
+        stockWarning: { type: boolean }
+    Cart:
+      type: object
+      required: [id, status, items, subtotalCents, warnings]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [OPEN, CHECKED_OUT] }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartItem' }
+        subtotalCents: { type: integer, minimum: 0 }
+        warnings:
+          type: array
+          items: { type: string, example: PRICE_CHANGED:prod-keyboard }
+    OrderItem:
+      type: object
+      required: [id, productId, productName, quantity, unitPriceCents, lineTotalCents]
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        productName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unitPriceCents: { type: integer }
+        lineTotalCents: { type: integer }
+    Order:
+      type: object
+      required: [id, cartId, status, subtotalCents, discountCents, totalCents, couponCode, couponPercent, paymentRef, createdAt, items]
+      properties:
+        id: { type: string }
+        cartId: { type: string }
+        status: { type: string, enum: [PLACED] }
+        subtotalCents: { type: integer }
+        discountCents: { type: integer }
+        totalCents: { type: integer }
+        couponId: { type: string, nullable: true }
+        couponCode: { type: string, nullable: true }
+        couponPercent: { type: integer, nullable: true }
+        paymentRef: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+        replayed: { type: boolean }
+        price:
+          type: object
+          description: Present only on the first successful checkout response.
+          required: [subtotalCents, discountCents, totalCents]
+          properties:
+            subtotalCents: { type: integer }
+            discountCents: { type: integer }
+            totalCents: { type: integer }
+    Coupon:
+      type: object
+      required: [id, code, milestone, discountPercent, status]
+      properties:
+        id: { type: string }
+        code: { type: string, pattern: '^SAVE-[A-F0-9]{8}$' }
+        milestone: { type: integer, minimum: 1 }
+        discountPercent: { type: integer, minimum: 1, maximum: 100 }
+        status: { type: string, enum: [AVAILABLE, REDEEMED] }
+        createdAt: { type: string, format: date-time }
+        redeemedAt: { type: string, format: date-time, nullable: true }
+        orderId: { type: string, nullable: true }
+    Report:
+      type: object
+      required: [totalOrders, quantityByProduct, grossRevenueCents, totalDiscountCents, netRevenueCents, coupons]
+      properties:
+        totalOrders: { type: integer, minimum: 0 }
+        quantityByProduct:
+          type: array
+          items:
+            type: object
+            required: [productId, productName, quantity]
+            properties:
+              productId: { type: string }
+              productName: { type: string }
+              quantity: { type: integer, minimum: 0 }
+        grossRevenueCents: { type: integer }
+        totalDiscountCents: { type: integer }
+        netRevenueCents: { type: integer }
+        coupons:
+          type: object
+          required: [generated, available, redeemed]
+          properties:
+            generated: { type: integer, minimum: 0 }
+            available: { type: integer, minimum: 0 }
+            redeemed: { type: integer, minimum: 0 }
