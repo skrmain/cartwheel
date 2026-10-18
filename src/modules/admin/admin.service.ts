@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../../db/prisma.js';
 import { config } from '../../config/env.js';
-import { NoEligibleMilestoneError, PaymentFailedError } from '../../shared/errors/app-error.js';
+import { NoEligibleMilestoneError } from '../../shared/errors/app-error.js';
 
 function generateCouponCode() {
     return `SAVE-${randomBytes(4).toString('hex').toUpperCase()}`;

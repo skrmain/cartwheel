@@ -11,17 +11,3 @@ export function percentDiscount(subtotalCents: number, percent: number): number 
     const rawDiscount = Math.floor((subtotalCents * normalizedPercent + 50) / 100);
     return clampCents(Math.min(rawDiscount, subtotalCents));
 }
-
-export function totalAfterDiscount(subtotalCents: number, percent: number): number {
-    const discount = percentDiscount(subtotalCents, percent);
-    return clampCents(subtotalCents - discount);
-}
-
-export function formatCents(cents: number): string {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(cents / 100);
-}

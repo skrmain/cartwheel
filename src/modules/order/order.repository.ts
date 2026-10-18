@@ -7,11 +7,4 @@ export const orderRepository = {
             include: { items: true, coupon: true },
         });
     },
-
-    findByCartId(cartId: string, tx?: PrismaClientOrTransaction) {
-        return (tx ?? prisma).order.findUnique({
-            where: { cartId },
-            include: { items: true, coupon: true },
-        });
-    },
 };

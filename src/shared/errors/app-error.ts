@@ -8,22 +8,6 @@ export class AppError extends Error {
         super(message);
         this.name = new.target.name;
     }
-
-    static validation(message = 'Request validation failed.', details: Record<string, unknown> = {}) {
-        return new AppError(message, 'VALIDATION_ERROR', 400, details);
-    }
-}
-
-export class NotImplementedError extends AppError {
-    constructor() {
-        super('This endpoint is not implemented yet.', 'NOT_IMPLEMENTED', 501);
-    }
-}
-
-export class ValidationError extends AppError {
-    constructor(message = 'Request validation failed.', details: Record<string, unknown> = {}) {
-        super(message, 'VALIDATION_ERROR', 400, details);
-    }
 }
 
 export class InvalidQuantityError extends AppError {

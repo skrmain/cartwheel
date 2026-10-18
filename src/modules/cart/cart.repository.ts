@@ -40,11 +40,4 @@ export const cartRepository = {
     deleteItem(cartId: string, productId: string, tx?: PrismaClientOrTransaction) {
         return (tx ?? prisma).cartItem.deleteMany({ where: { cartId, productId } });
     },
-
-    claimOpenCart(cartId: string, tx?: PrismaClientOrTransaction) {
-        return (tx ?? prisma).cart.updateMany({
-            where: { id: cartId, status: 'OPEN' },
-            data: { status: 'CHECKED_OUT' },
-        });
-    },
 };
