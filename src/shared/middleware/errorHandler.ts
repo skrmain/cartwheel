@@ -3,6 +3,24 @@ import { z } from 'zod';
 import { AppError, ServiceBusyError } from '../errors/app-error.js';
 
 export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+    if (
+        typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        error.status === 400 &&
+        'type' in error &&
+        error.type === 'entity.parse.failed'
+    ) {
+        res.status(400).json({
+            error: {
+                code: 'INVALID_JSON',
+                message: 'Request body contains invalid JSON.',
+                details: {},
+            },
+        });
+        return;
+    }
+
     if (error instanceof AppError) {
         if (error.statusCode === 503) {
             res.setHeader('Retry-After', String(error.details.retryAfterSeconds ?? 1));
