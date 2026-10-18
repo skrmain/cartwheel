@@ -1,9 +1,9 @@
 import type { RequestHandler } from 'express';
 import { adminService } from './admin.service.js';
 
-export const generateCoupons: RequestHandler = async (req, res, next) => {
+export const generateCoupons: RequestHandler = async (_req, res, next) => {
     try {
-        res.status(201).json(await adminService.generateCoupons(req.body));
+        res.status(201).json(await adminService.generateCoupons());
     } catch (error) {
         next(error);
     }

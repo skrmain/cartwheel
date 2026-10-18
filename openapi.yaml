@@ -139,7 +139,7 @@ paths:
         - $ref: '#/components/parameters/CartId'
       responses:
         '200':
-          description: Cart with current product prices, stock, and warnings.
+          description: Cart with current product prices, stock, and warnings. Cart items do not reserve inventory; checkout revalidates stock. Price changes are indicated against unitPriceCentsAtAdd.
           content:
             application/json:
               schema:
@@ -180,7 +180,7 @@ paths:
     put:
       operationId: setCartItemQuantity
       summary: Set a cart item's quantity
-      description: PUT replaces the quantity; it does not increment it. Quantity changes remain absolute and must be available in stock.
+      description: PUT replaces the quantity; it does not increment it. Quantity changes remain absolute and must be available in stock. Adding an item does not reserve inventory.
       tags: [Carts]
       parameters:
         - $ref: '#/components/parameters/CartId'
@@ -351,6 +351,8 @@ paths:
         charging again or decrementing stock again. A retry with a different couponCode still
         returns the original order and ignores the new coupon. expectedTotalCents compares
         against the current total (after any coupon discount); a mismatch returns PRICE_CHANGED.
+        Checkout uses the current product price, not the add-time price snapshot. Coupon discounts
+        apply once to the combined subtotal and round half-up to the nearest cent, capped at subtotal.
         Checkout is atomic: any failure leaves stock, coupon redemption, and cart status untouched.
       tags: [Carts, Orders]
       parameters:
@@ -583,7 +585,11 @@ paths:
     post:
       operationId: generateCoupons
       summary: Generate the next eligible milestone coupon
-      description: administrative operation, no auth implemented by design
+      description: >
+        ADMIN operation; no authentication is implemented. Uses COUPON_EVERY_N_ORDERS (n,
+        default 5) successful placed orders per milestone and COUPON_DISCOUNT_PERCENT (x,
+        default 10) as the generated coupon percentage. One coupon is generated per call, only
+        for an unissued eligible milestone.
       tags: [Admin]
       requestBody:
         required: false
@@ -591,11 +597,6 @@ paths:
           application/json:
             schema:
               type: object
-              properties:
-                count:
-                  type: integer
-                  minimum: 1
-                  description: Accepted for compatibility; one coupon is generated per call.
             example: {}
       responses:
         '201':
@@ -962,7 +963,7 @@ components:
         replayed: { type: boolean }
         price:
           type: object
-          description: Present only on the first successful checkout response.
+          description: Present on both initial and replayed checkout responses; values match the order totals.
           required: [subtotalCents, discountCents, totalCents]
           properties:
             subtotalCents: { type: integer }

@@ -103,6 +103,8 @@ describe('competing checkout requests', () => {
         expect(responses.filter((response) => response.body.replayed === false)).toHaveLength(1);
         expect(responses.filter((response) => response.body.replayed === true)).toHaveLength(7);
         expect(new Set(responses.map((response) => response.body.id)).size).toBe(1);
+        expect(responses.every((response) => response.body.price.subtotalCents === 2000)).toBe(true);
+        expect(responses.every((response) => response.body.price.totalCents === 2000)).toBe(true);
         expect(await prisma.order.count()).toBe(1);
         expect(await prisma.product.findUniqueOrThrow({ where: { id: 'idempotent' } })).toMatchObject({ stock: 6 });
         expect(await prisma.cart.findUniqueOrThrow({ where: { id: cartId } })).toMatchObject({
@@ -141,6 +143,44 @@ describe('competing checkout requests', () => {
 });
 
 describe('competing cart writes and coupon generation', () => {
+    it('serializes cart item writes with checkout so order and cart snapshots cannot diverge', async () => {
+        await createProduct('mutation-checkout-race', 30);
+        const cartId = await createCartWithItems([{ productId: 'mutation-checkout-race' }]);
+
+        const [mutations, firstCheckout] = await Promise.all([
+            Promise.all(
+                Array.from({ length: 12 }, (_, index) =>
+                    request(app)
+                        .put(`/carts/${cartId}/items/mutation-checkout-race`)
+                        .send({ quantity: index + 1 })
+                        .timeout(requestTimeout),
+                ),
+            ),
+            request(app).post(`/carts/${cartId}/checkout`).send({}).timeout(requestTimeout),
+        ]);
+
+        for (const mutation of mutations) {
+            if (mutation.status === 200) continue;
+            if (mutation.status === 409) {
+                expectApiError(mutation, 409, 'CART_ALREADY_CHECKED_OUT');
+                continue;
+            }
+            expectApiError(mutation, 503, 'SERVICE_BUSY');
+        }
+
+        const checkout =
+            firstCheckout.status === 503
+                ? await request(app).post(`/carts/${cartId}/checkout`).send({}).timeout(requestTimeout)
+                : firstCheckout;
+        expect(checkout.status).toBe(201);
+        const cart = await request(app).get(`/carts/${cartId}`);
+        expect(cart.status).toBe(200);
+        expect(cart.body.status).toBe('CHECKED_OUT');
+        expect(cart.body.items).toHaveLength(1);
+        expect(checkout.body.items[0].quantity).toBe(cart.body.items[0].quantity);
+        expect(await prisma.order.count({ where: { cartId } })).toBe(1);
+    });
+
     it('upserts concurrent PUTs into one CartItem row', async () => {
         await createProduct('put-race', 100);
         const cartId = await createCartWithItems([]);

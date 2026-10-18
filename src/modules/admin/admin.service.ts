@@ -8,7 +8,7 @@ function generateCouponCode() {
 }
 
 export const adminService = {
-    async generateCoupons(_input: { count?: number }) {
+    async generateCoupons() {
         const n = config.couponEveryNOrders;
         const x = config.couponDiscountPercent;
 
@@ -51,8 +51,9 @@ export const adminService = {
                         status: coupon.status,
                         createdAt: coupon.createdAt.toISOString(),
                     };
-                } catch (error: any) {
-                    if (error?.code === 'P2002') {
+                } catch (error) {
+                    // P2002 -- Unique constraint violation
+                    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
                         const existingCoupon = await tx.coupon.findUnique({
                             where: { milestone },
                         });
@@ -68,12 +69,7 @@ export const adminService = {
                         }
                     }
 
-                    throw new NoEligibleMilestoneError({
-                        totalOrders,
-                        n,
-                        rewardedMilestones,
-                        eligibleMilestones,
-                    });
+                    throw error;
                 }
             },
             { timeout: 15000, maxWait: 15000 },

@@ -1,4 +1,4 @@
-import { prisma } from '../../db/prisma.js';
+import { prisma, type PrismaClientOrTransaction } from '../../db/prisma.js';
 import {
     CartAlreadyCheckedOutError,
     CartNotFoundError,
@@ -75,6 +75,11 @@ function buildOrderSnapshot(order: any, replayed = false) {
         subtotalCents: order.subtotalCents,
         discountCents: order.discountCents,
         totalCents: order.totalCents,
+        price: {
+            subtotalCents: order.subtotalCents,
+            discountCents: order.discountCents,
+            totalCents: order.totalCents,
+        },
         couponId: order.couponId,
         couponCode: order.couponCode,
         couponPercent: order.couponPercent,
@@ -83,6 +88,40 @@ function buildOrderSnapshot(order: any, replayed = false) {
         items,
         replayed,
     };
+}
+
+async function findOpenCartForUpdate(tx: PrismaClientOrTransaction, cartId: string) {
+    const current = await tx.cart.findUnique({
+        where: { id: cartId },
+        select: { id: true, status: true },
+    });
+    if (!current) {
+        throw new CartNotFoundError(cartId);
+    }
+    if (current.status !== 'OPEN') {
+        throw new CartAlreadyCheckedOutError(cartId);
+    }
+
+    const locked = await tx.cart.updateMany({
+        where: { id: cartId, status: 'OPEN' },
+        data: { updatedAt: new Date() },
+    });
+    if (locked.count === 0) {
+        const latest = await tx.cart.findUnique({
+            where: { id: cartId },
+            select: { id: true },
+        });
+        if (!latest) {
+            throw new CartNotFoundError(cartId);
+        }
+        throw new CartAlreadyCheckedOutError(cartId);
+    }
+
+    const cart = await cartRepository.findById(cartId, tx);
+    if (!cart) {
+        throw new CartNotFoundError(cartId);
+    }
+    return cart;
 }
 
 export const cartService = {
@@ -110,57 +149,54 @@ export const cartService = {
             throw new InvalidQuantityError({ productId, quantity });
         }
 
-        const cart = await cartRepository.findById(cartId);
-        if (!cart) {
-            throw new CartNotFoundError(cartId);
-        }
-        if (cart.status === 'CHECKED_OUT') {
-            throw new CartAlreadyCheckedOutError(cartId);
-        }
+        return prisma.$transaction(
+            async (tx) => {
+                const cart = await findOpenCartForUpdate(tx, cartId);
+                const product = await productRepository.findById(productId, tx);
+                if (!product) {
+                    throw new ProductNotFoundError(productId);
+                }
 
-        const product = await productRepository.findById(productId);
-        if (!product) {
-            throw new ProductNotFoundError(productId);
-        }
+                if (quantity > product.stock) {
+                    throw new InsufficientStockError([{ productId, requested: quantity, available: product.stock }]);
+                }
 
-        if (quantity > product.stock) {
-            throw new InsufficientStockError([{ productId, requested: quantity, available: product.stock }]);
-        }
+                const existingItem = cart.items.find((item) => item.productId === productId);
+                await cartRepository.upsertItem(
+                    cartId,
+                    productId,
+                    quantity,
+                    existingItem ? existingItem.unitPriceCentsAtAdd : product.priceCents,
+                    tx,
+                );
 
-        const existingItem = cart.items.find((item) => item.productId === productId);
-        await cartRepository.upsertItem(
-            cartId,
-            productId,
-            quantity,
-            existingItem ? existingItem.unitPriceCentsAtAdd : product.priceCents,
+                const freshCart = await cartRepository.findById(cartId, tx);
+                if (!freshCart) {
+                    throw new CartNotFoundError(cartId);
+                }
+                return buildCartView(freshCart);
+            },
+            { timeout: 15000, maxWait: 15000, isolationLevel: 'Serializable' },
         );
-
-        const freshCart = await cartRepository.findById(cartId);
-        if (!freshCart) {
-            throw new CartNotFoundError(cartId);
-        }
-        return buildCartView(freshCart);
     },
 
     async removeItem(cartId: string, productId: string) {
-        const cart = await cartRepository.findById(cartId);
-        if (!cart) {
-            throw new CartNotFoundError(cartId);
-        }
-        if (cart.status === 'CHECKED_OUT') {
-            throw new CartAlreadyCheckedOutError(cartId);
-        }
+        return prisma.$transaction(
+            async (tx) => {
+                await findOpenCartForUpdate(tx, cartId);
+                const deleted = await cartRepository.deleteItem(cartId, productId, tx);
+                if (deleted.count === 0) {
+                    throw new ItemNotInCartError(productId);
+                }
 
-        const deleted = await cartRepository.deleteItem(cartId, productId);
-        if (deleted.count === 0) {
-            throw new ItemNotInCartError(productId);
-        }
-
-        const freshCart = await cartRepository.findById(cartId);
-        if (!freshCart) {
-            throw new CartNotFoundError(cartId);
-        }
-        return buildCartView(freshCart);
+                const freshCart = await cartRepository.findById(cartId, tx);
+                if (!freshCart) {
+                    throw new CartNotFoundError(cartId);
+                }
+                return buildCartView(freshCart);
+            },
+            { timeout: 15000, maxWait: 15000, isolationLevel: 'Serializable' },
+        );
     },
 
     async checkout(
@@ -345,11 +381,6 @@ export const cartService = {
                 return {
                     ...buildOrderSnapshot(createdOrder),
                     replayed: false,
-                    price: {
-                        subtotalCents,
-                        discountCents,
-                        totalCents,
-                    },
                 };
             },
             {
